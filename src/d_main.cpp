@@ -327,6 +327,14 @@ FARG(bots, "", "", "",
 FARG(debug, "", "", "",
 	"");
 
+FARG(complevel, "Play", "Sets the engine compatibility level.", "boom",
+	"Sets the engine compability level to more closely follow quirks of other engines."
+	"Valid Options:\n"
+	"vanilla: 2, 3, 4, 1.9, doom2, ultimate, udoom, final, tnt, plutonia, vanilla\n"
+	"boom: 9, boom\n"
+	"mbf: 11, mbf\n"
+	"mbf21: 21, mbf21");
+
 EXTERN_FARG(join);
 EXTERN_FARG(host);
 
@@ -1526,7 +1534,6 @@ void D_Display ()
 				DrawTexture(twod, tex, 160 - tex->GetDisplayWidth()/2, 100 - tex->GetDisplayHeight()/2,
 					DTA_320x200, true, TAG_DONE);
 			}
-			NoWipe = 10;
 		}
 
 		if (snd_drawoutput)
