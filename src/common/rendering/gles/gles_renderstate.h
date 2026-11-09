@@ -68,6 +68,7 @@ class FGLRenderState final : public FRenderState
 	IIndexBuffer *mCurrentIndexBuffer;
 
 	HWViewpointUniforms* mHwUniforms = nullptr;
+	FVector4 mLastVertexNormal = { -1.f, -1.f, -1.f, -1.f };
 
 public:
 

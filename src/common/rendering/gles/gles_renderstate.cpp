@@ -73,6 +73,7 @@ void FGLRenderState::Reset()
 	mCurrentVertexBuffer = nullptr;
 	mCurrentVertexOffsets[0] = mVertexOffsets[0] = 0;
 	mCurrentIndexBuffer = nullptr;
+	mLastVertexNormal = { -1.f, -1.f, -1.f, -1.f };
 
 }
 
@@ -231,7 +232,12 @@ bool FGLRenderState::ApplyShader()
 	}
 
 	glVertexAttrib4fv(VATTR_COLOR, &mStreamData.uVertexColor.X);
-	glVertexAttrib4fv(VATTR_NORMAL, &mStreamData.uVertexNormal.X);
+	// Sprite quads set this to zero and it is context state, not program state.
+	if (mStreamData.uVertexNormal != mLastVertexNormal)
+	{
+		glVertexAttrib4fv(VATTR_NORMAL, &mStreamData.uVertexNormal.X);
+		mLastVertexNormal = mStreamData.uVertexNormal;
+	}
 
 	activeShader->cur->muDesaturation.Set(mStreamData.uDesaturationFactor);
 	//activeShader->cur->muFogEnabled.Set(fogset);

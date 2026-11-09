@@ -221,7 +221,8 @@ void HWSprite::DrawSprite(HWDrawInfo *di, FRenderState &state, bool translucent)
 
 	int clampmode = CLAMP_XY;
 
-	if (texture && texture->isNoMipmap())
+	// Particle and visual-thinker sprites are reused at many sizes. Mipmaps are built on first draw and stall the frame.
+	if (actor == nullptr || (texture && texture->isNoMipmap()))
 	{
 		clampmode = CLAMP_XY_NOMIP;
 	}

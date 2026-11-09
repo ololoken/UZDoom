@@ -445,6 +445,7 @@ public:
 
 	FShader *BindEffect(int effect, EPassType passType, ShaderFlavourData& flavour);
 	FShader *Get(unsigned int eff, bool alphateston, EPassType passType);
+	void PrewarmCommonVariants();
 
 	void SetActiveShader(FShader::ShaderVariantData *sh);
 private:

@@ -63,6 +63,27 @@ uint8_t FSamplerManager::Bind(int texunit, int num, int lastval)
 			? 1.0f
 			: gl_texture_filter_anisotropic;
 
+	// Wrap and filter live on the texture, so the same texture and mode can skip the parameter calls.
+	struct CachedSampler
+	{
+		unsigned int texId = 0;
+		int clamp = -1;
+		int filter = -1;
+		float aniso = -1.f;
+	};
+	static CachedSampler cached[FHardwareTexture::MAX_TEXTURES];
+	if (texunit >= 0 && texunit < FHardwareTexture::MAX_TEXTURES)
+	{
+		unsigned int texId = FHardwareTexture::lastbound[texunit];
+		CachedSampler &entry = cached[texunit];
+		if (texId != 0 && entry.texId == texId && entry.clamp == num && entry.filter == filter && entry.aniso == aniso)
+			return 255;
+		entry.texId = texId;
+		entry.clamp = num;
+		entry.filter = filter;
+		entry.aniso = aniso;
+	}
+
 	glActiveTexture(GL_TEXTURE0 + texunit);
 	switch (num)
 	{

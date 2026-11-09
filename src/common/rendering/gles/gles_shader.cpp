@@ -18,6 +18,8 @@
 #include "gles_system.h"
 #include "c_cvars.h"
 #include "v_video.h"
+#include "hw_cvars.h"
+#include "textures.h"
 #include "filesystem.h"
 #include "engineerrors.h"
 #include "cmdlib.h"
@@ -771,6 +773,38 @@ FShaderManager::FShaderManager()
 {
 	for (int passType = 0; passType < MAX_PASS_TYPES; passType++)
 		mPassShaders.Push(new FShaderCollection((EPassType)passType));
+	PrewarmCommonVariants();
+}
+
+void FShaderManager::PrewarmCommonVariants()
+{
+	// The default material is what sprites and plain walls use. These are the fog and dynamic-light
+	// combinations an explosion hits on the first frame. Compiling them here keeps that frame from linking shaders.
+	const bool radial = gl_fogmode == 2;
+	const int fogModes[] = { 0, 1, 2 }; // off, on, on and colored
+	for (int alphaTest = 0; alphaTest < 2; alphaTest++)
+	{
+		FShader *shader = Get(SHADER_Default, alphaTest == 1, NORMAL_PASS);
+		if (shader == nullptr)
+			continue;
+		for (int fog : fogModes)
+		{
+			for (int lightsAdd = 0; lightsAdd < 2; lightsAdd++)
+			{
+				for (int useLightLevel = 0; useLightLevel < 2; useLightLevel++)
+				{
+					ShaderFlavourData flavour = {};
+					flavour.textureMode = TM_NORMAL;
+					flavour.fogEnabled = fog > 0;
+					flavour.colouredFog = fog == 2;
+					flavour.fogEquationRadial = radial && flavour.fogEnabled;
+					flavour.dynLightsAdd = lightsAdd == 1;
+					flavour.useULightLevel = useLightLevel == 1;
+					shader->Bind(flavour);
+				}
+			}
+		}
+	}
 }
 
 FShaderManager::~FShaderManager()
