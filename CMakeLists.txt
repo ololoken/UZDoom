@@ -37,6 +37,32 @@ set(ABSL_BUILD_TESTING OFF) # don't build/run abseil tests
 # UZDoom itself has no libs. Ensure bundled dependencies are statically linked.
 set( BUILD_SHARED_LIBS OFF CACHE INTERNAL "" FORCE )
 
+# Macro for building libraries without debugging information
+macro( make_release_only )
+	set( CMAKE_C_FLAGS_MINSIZEREL ${CMAKE_C_FLAGS_RELEASE} )
+	set( CMAKE_C_FLAGS_RELWITHDEBINFO ${CMAKE_C_FLAGS_RELEASE} )
+	string( REPLACE "/MT " "/MTd " CMAKE_C_FLAGS_DEBUG ${CMAKE_C_FLAGS_RELEASE} )
+	set( CMAKE_CXX_FLAGS_MINSIZEREL ${CMAKE_CXX_FLAGS_RELEASE} )
+	set( CMAKE_CXX_FLAGS_RELWITHDEBINFO ${CMAKE_CXX_FLAGS_RELEASE} )
+	string( REPLACE "/MT " "/MTd " CMAKE_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_RELEASE} )
+endmacro()
+
+# Nested native build used by the Emscripten configure. lemon, re2c, and zipdir
+# run on the host during the build, so they must not go through emcc.
+if( BUILD_HOST_TOOLS_ONLY )
+	message( STATUS "Configuring native host tools (lemon, re2c, zipdir)" )
+	set( LZMA_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libraries/lzma/C" )
+	set( BZIP2_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libraries/bzip2" )
+	set( BZIP2_LIBRARIES bz2 )
+	set( CROSS_EXPORTS "" )
+	add_subdirectory( libraries/miniz )
+	add_subdirectory( libraries/bzip2 )
+	add_subdirectory( libraries/lzma )
+	add_subdirectory( tools )
+	export( TARGETS ${CROSS_EXPORTS} FILE "${CMAKE_BINARY_DIR}/ImportExecutables.cmake" )
+	return()
+endif()
+
 # make all targets use LTO - want to do this early in the cmake to ensure it applies to any targets
 option( FORCE_NO_LTO "Turn off LTO even if it would be possible to use it." NO )
 
@@ -77,14 +103,11 @@ find_package(Threads REQUIRED)
 find_package(Python3 3.6 REQUIRED)
 
 if(EMSCRIPTEN)
-	option(WASM_64 "Enable WASM64 build" OFF)
 	option(WASM_THREADS "Enable WASM pthread emulation" OFF)
-	if (WASM_64)
-		set(USE_FLAGS "${USE_FLAGS} -sMEMORY64")
-	endif ()
 	if (WASM_THREADS)
 		set(USE_FLAGS "${USE_FLAGS} -pthread")
 	endif ()
+	set(USE_FLAGS "${USE_FLAGS} -sMEMORY64")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${USE_FLAGS}" CACHE STRING "" FORCE)
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${USE_FLAGS}" CACHE STRING "" FORCE)
 	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${USE_FLAGS}" CACHE STRING "" FORCE)
@@ -94,15 +117,34 @@ endif ()
 list( APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake )
 include( FindPackageHandleStandardArgs )
 
+include( NativeHostTools )
+
 # Support cross compiling
 option( FORCE_CROSSCOMPILE "Turn on cross compiling." NO )
 if( FORCE_CROSSCOMPILE )
 	set( CMAKE_CROSSCOMPILING TRUE )
 endif()
 
-if(CMAKE_CROSSCOMPILING AND NOT EMSCRIPTEN)
-	set(IMPORT_EXECUTABLES "IMPORTFILE-NOTFOUND" CACHE FILEPATH "Export file from native build.")
-	include(${IMPORT_EXECUTABLES})
+# lemon, re2c, and zipdir are host tools. Cross builds, including Emscripten,
+# import native executables and keep invoking them by those target names.
+if( CMAKE_CROSSCOMPILING )
+	set( IMPORT_EXECUTABLES "" CACHE FILEPATH "Path to ImportExecutables.cmake from a native build. Leave empty for an Emscripten build to compile lemon, re2c, and zipdir with the host compiler." )
+	if( (EMSCRIPTEN OR CMAKE_SYSTEM_NAME STREQUAL "Emscripten") AND (IMPORT_EXECUTABLES STREQUAL "" OR IMPORT_EXECUTABLES MATCHES "NOTFOUND") )
+		uzdoom_build_native_host_tools( UZDOOM_HOST_TOOLS_IMPORT )
+		set( IMPORT_EXECUTABLES "${UZDOOM_HOST_TOOLS_IMPORT}" )
+	endif()
+	if( NOT EXISTS "${IMPORT_EXECUTABLES}" )
+		message( FATAL_ERROR
+			"This cross build needs native lemon, re2c, and zipdir.\n"
+			"Set IMPORT_EXECUTABLES to ImportExecutables.cmake produced by a native build." )
+	endif()
+	# add_executable(IMPORTED) copies CMAKE_CROSSCOMPILING_EMULATOR onto the
+	# new target. Emscripten sets that to node, which must not wrap host tools.
+	set( _uzdoom_saved_emulator "${CMAKE_CROSSCOMPILING_EMULATOR}" )
+	set( CMAKE_CROSSCOMPILING_EMULATOR "" )
+	include( ${IMPORT_EXECUTABLES} )
+	set( CMAKE_CROSSCOMPILING_EMULATOR "${_uzdoom_saved_emulator}" )
+	uzdoom_map_host_tool_configs()
 endif()
 
 # Recursive function to place PK3 archive source files into a hierarchy of source file in the IDE
@@ -210,16 +252,6 @@ macro( generate_language_files target destination identifier )
 	add_custom_target(${lang_target} COMMAND Python3::Interpreter -B -E -s "${lang_script}" --recipe ${identifier} --output "${lang_dst}")
 	add_dependencies(${target} ${lang_target})
 	add_custom_command(TARGET ${target} POST_BUILD COMMAND ${CMAKE_COMMAND} -E remove "${lang_dst}")
-endmacro()
-
-# Macro for building libraries without debugging information
-macro( make_release_only )
-	set( CMAKE_C_FLAGS_MINSIZEREL ${CMAKE_C_FLAGS_RELEASE} )
-	set( CMAKE_C_FLAGS_RELWITHDEBINFO ${CMAKE_C_FLAGS_RELEASE} )
-	string( REPLACE "/MT " "/MTd " CMAKE_C_FLAGS_DEBUG ${CMAKE_C_FLAGS_RELEASE} )
-	set( CMAKE_CXX_FLAGS_MINSIZEREL ${CMAKE_CXX_FLAGS_RELEASE} )
-	set( CMAKE_CXX_FLAGS_RELWITHDEBINFO ${CMAKE_CXX_FLAGS_RELEASE} )
-	string( REPLACE "/MT " "/MTd " CMAKE_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_RELEASE} )
 endmacro()
 
 set( ZDOOM_OUTPUT_DIR ${CMAKE_BINARY_DIR} CACHE PATH "Directory where zdoom.pk3 and the executable will be created." )

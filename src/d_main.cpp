@@ -486,7 +486,6 @@ CUSTOM_CVAR (String, vid_cursor, "None", CVAR_ARCHIVE | CVAR_NOINITCALL)
 {
 	bool res = false;
 
-
 	if (!stricmp(self, "None" ) && gameinfo.CursorPic.IsNotEmpty())
 	{
 		res = I_SetCursor(TexMan.GetGameTextureByName(gameinfo.CursorPic.GetChars()));
@@ -500,6 +499,11 @@ CUSTOM_CVAR (String, vid_cursor, "None", CVAR_ARCHIVE | CVAR_NOINITCALL)
 		I_SetCursor(TexMan.GetGameTextureByName("cursor"));
 	}
 }
+
+CUSTOM_CVARD(Bool, vid_cursor_invert, false, CVAR_ARCHIVE | CVAR_NOINITCALL, "Flips cursor along its y axis")
+{
+	vid_cursor = *vid_cursor;
+};
 
 // Controlled by startup dialog
 CVAR(Bool, disableautoload, false, CVAR_ARCHIVE | CVAR_NOINITCALL | CVAR_GLOBALCONFIG)
@@ -1615,6 +1619,10 @@ void D_DoomLoopIteration(void* lasttic_)
 		D_ProcessEvents();
 		D_Display ();
 		S_UpdateMusic();
+#if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
+		if (GSnd != nullptr)
+			GSnd->UpdateSounds();
+#endif
 
 		if (gameloop_abort)
 		{
@@ -1664,11 +1672,14 @@ void D_DoomLoop ()
 	vid_cursor->Callback();
 #if __EMSCRIPTEN__
 	EM_ASM({ Module.callbacks?.onReady?.() });
-	emscripten_set_main_loop_arg(&D_DoomLoopIteration, &lasttic, 0, true);
-#else
-	for (;;)
-		D_DoomLoopIteration(&lasttic);
 #endif
+	for (;;)
+	{
+		D_DoomLoopIteration(&lasttic);
+#if __EMSCRIPTEN__
+		emscripten_sleep(0);
+#endif
+	}
 }
 
 //==========================================================================

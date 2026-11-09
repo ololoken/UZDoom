@@ -69,14 +69,22 @@ if(NOT WIN32 AND NOT APPLE)
 	determine_package_config_dependency(ZMUSIC_PACKAGE_DEPENDENCIES TARGET Threads::Threads MODULE Threads)
 endif()
 
+if(EMSCRIPTEN)
+	# Wasm cannot dlopen libsndfile.so.1. Link the sysroot library instead.
+	set(DYN_SNDFILE OFF CACHE BOOL "Dynamically load libsndfile" FORCE)
+endif()
+
 if ("vcpkg-libsndfile" IN_LIST VCPKG_MANIFEST_FEATURES)
 	set(DYN_SNDFILE 0)
-else()
+elseif(NOT EMSCRIPTEN)
 	option(DYN_SNDFILE "Dynamically load libsndfile" ON)
 endif()
 
 if(DYN_SNDFILE)
 	target_compile_definitions(zmusic-obj INTERFACE HAVE_SNDFILE DYN_SNDFILE)
+elseif(EMSCRIPTEN)
+	# Linked from the emsdk sysroot by the engine target. Do not dlopen it.
+	target_compile_definitions(zmusic-obj INTERFACE HAVE_SNDFILE)
 else()
 	find_package(SndFile)
 
@@ -164,8 +172,8 @@ use_fast_math(zmusiclite)
 target_include_directories(zmusic INTERFACE $<INSTALL_INTERFACE:include> $<BUILD_INTERFACE:${ZMusic_SOURCE_DIR}/include> $<BUILD_INTERFACE:${ZMusic_SOURCE_DIR}/source/loader>)
 target_include_directories(zmusiclite INTERFACE $<INSTALL_INTERFACE:include> $<BUILD_INTERFACE:${ZMusic_SOURCE_DIR}/include>)
 
-target_link_libraries_hidden(zmusic zmusic-obj adl oplsynth opn timidity timidityplus wildmidi fluidsynth)
-target_link_libraries_hidden(zmusiclite zmusic-obj fluidsynth)
+target_link_libraries_hidden(zmusic zmusic-obj adl oplsynth opn timidity timidityplus wildmidi libfluidsynth)
+target_link_libraries_hidden(zmusiclite zmusic-obj libfluidsynth)
 
 target_compile_definitions(zmusic PUBLIC $<$<STREQUAL:$<TARGET_PROPERTY:zmusic,TYPE>,STATIC_LIBRARY>:ZMUSIC_STATIC>)
 target_compile_definitions(zmusiclite PRIVATE ZMUSIC_LITE=1 PUBLIC $<$<STREQUAL:$<TARGET_PROPERTY:zmusiclite,TYPE>,STATIC_LIBRARY>:ZMUSIC_STATIC>)

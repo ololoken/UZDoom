@@ -95,11 +95,9 @@ else()
 	endif()
 
 	# Non-Windows version also needs SDL except native OS X backend
-	if( NOT APPLE OR NOT OSX_COCOA_BACKEND AND NOT EMSCRIPTEN )
-		find_package( SDL2 REQUIRED )
-		include_directories( SYSTEM "${SDL2_INCLUDE_DIR}" )
-		link_directories(${SDL2_LINK_DIR})
-		set( PROJECT_LIBRARIES ${PROJECT_LIBRARIES} "${SDL2_LIBRARY}" )
+	if( NOT APPLE OR NOT OSX_COCOA_BACKEND AND NOT EMSCRIPTEN)
+		find_package( SDL2 CONFIG REQUIRED )
+		list( APPEND PROJECT_LIBRARIES SDL2::SDL2 )
 	endif()
 
 endif()
@@ -1319,10 +1317,21 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
 endif()
 
 if(EMSCRIPTEN)
+	# memory64 wasm-ld does not search sysroot/lib, where these archives are installed.
+	# Link the files directly. Order matches sndfile's Requires.private.
+	foreach(_em_sndlib IN ITEMS sndfile vorbisenc vorbis FLAC opus ogg)
+		string(TOUPPER "${_em_sndlib}" _em_sndlib_upper)
+		find_library("EM_${_em_sndlib_upper}_LIBRARY" NAMES "${_em_sndlib}")
+		if(NOT EM_${_em_sndlib_upper}_LIBRARY)
+			message(FATAL_ERROR "Emscripten sysroot is missing lib${_em_sndlib}.a")
+		endif()
+		list(APPEND PROJECT_LIBRARIES "${EM_${_em_sndlib_upper}_LIBRARY}")
+	endforeach()
 
 	target_link_options(zdoom PRIVATE
-			$<$<CONFIG:RELEASE>:-sASYNCIFY -sASYNCIFY_STACK_SIZE=1MB>
+			$<$<CONFIG:RELEASE>:-sJSPI -sASYNCIFY_STACK_SIZE=1MB>
 			--use-port=sdl2
+			--use-port=bzip2
 			-sSTACK_SIZE=8MB
 			-sINITIAL_MEMORY=1GB
 			-sALLOW_MEMORY_GROWTH
@@ -1335,13 +1344,13 @@ if(EMSCRIPTEN)
 			-sMAX_WEBGL_VERSION=2
 			-sMIN_WEBGL_VERSION=2
 			-sFULL_ES2
-			$<$<NOT:$<BOOL:${DYN_SNDFILE}>>:-L$ENV{EMSDK}/upstream/emscripten/cache/sysroot/lib/ -lFLAC -lvorbis -lvorbisfile -lvorbisenc -lopus -logg>
 			$<$<CONFIG:RELEASE>:-O3 -flto>
 			$<$<CONFIG:DEBUG>:-g -gsource-map -sASSERTIONS=2 --profiling-funcs>
 	)
 
 	target_compile_options(zdoom PRIVATE
 			--use-port=sdl2
+			--use-port=bzip2
 			$<$<CONFIG:RELEASE>:-O3 -flto>
 			$<$<CONFIG:DEBUG>:-g -gsource-map>
 	)

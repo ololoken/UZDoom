@@ -24,9 +24,6 @@
 
 #include <functional>
 #include <chrono>
-#ifdef __EMSCRIPTEN__
-#include <emscripten.h>
-#endif
 
 #include "c_cvars.h"
 #include "cmdlib.h"
@@ -973,9 +970,9 @@ OpenALSoundRenderer::~OpenALSoundRenderer()
 	Device = NULL;
 }
 
+#if defined(__EMSCRIPTEN_PTHREADS__) || !defined(__EMSCRIPTEN__)
 void OpenALSoundRenderer::BackgroundProc()
 {
-#if defined(__EMSCRIPTEN_PTHREADS__) || !defined(__EMSCRIPTEN__)
 	std::unique_lock<std::mutex> lock(StreamLock);
 	while(!QuitThread.load())
 	{
@@ -986,16 +983,14 @@ void OpenALSoundRenderer::BackgroundProc()
 		}
 		else
 		{
-#endif
 			// Else, process all active streams and sleep for 100ms
 			for(size_t i = 0;i < Streams.Size();i++)
 				Streams[i]->Process();
-#if defined(__EMSCRIPTEN_PTHREADS__) || !defined(__EMSCRIPTEN__)
 			StreamWake.wait_for(lock, std::chrono::milliseconds(100));
 		}
 	}
-#endif
 }
+#endif
 
 void OpenALSoundRenderer::AddStream(OpenALSoundStream *stream)
 {
@@ -1272,30 +1267,11 @@ void OpenALSoundRenderer::UnloadSound(SoundHandle sfx)
 	getALError();
 }
 
-#if !defined(__EMSCRIPTEN_PTHREADS__) && defined(__EMSCRIPTEN__)
-void AsyncBackgroundProc(OpenALSoundRenderer *renderer)
-{
-	renderer->BackgroundProc();
-}
-#endif
-
 SoundStream *OpenALSoundRenderer::CreateStream(SoundStreamCallback callback, int buffbytes, SampleType stype, ChannelConfig chans, int samplerate, void *userdata)
 {
 #if defined(__EMSCRIPTEN_PTHREADS__) || !defined(__EMSCRIPTEN__)
 	if(StreamThread.get_id() == std::thread::id())
 		StreamThread = std::thread(std::mem_fn(&OpenALSoundRenderer::BackgroundProc), this);
-#else
-	EM_ASM({
-		if (Module.SoundStreamsWorker) return;
-		let running = false;
-		Module.SoundStreamsWorker = function () {
-			if (running) return;
-			running = true;
-			dynCall('vp', $0, [$1]);
-			running = false;
-		};
-		setInterval(Module.SoundStreamsWorker, 100);
-	}, &AsyncBackgroundProc, this);
 #endif
 	OpenALSoundStream *stream = new OpenALSoundStream(this);
 	if (!stream->Init(callback, buffbytes, stype, chans, samplerate, userdata))
@@ -1912,6 +1888,12 @@ void OpenALSoundRenderer::UpdateListener(SoundListener *listener)
 
 void OpenALSoundRenderer::UpdateSounds()
 {
+#if !defined(__EMSCRIPTEN_PTHREADS__) && defined(__EMSCRIPTEN__)
+	// No stream thread on this build. The main loop calls UpdateSounds every iteration.
+	for(size_t i = 0;i < Streams.Size();i++)
+		Streams[i]->Process();
+#endif
+
 	alProcessUpdatesSOFT();
 
 	if(ALC.EXT_disconnect)

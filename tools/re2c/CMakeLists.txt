@@ -1,6 +1,7 @@
 cmake_minimum_required( VERSION 3.16 )
 
-if( NOT CMAKE_CROSSCOMPILING OR EMSCRIPTEN)
+# Native build only. Cross builds, including Emscripten, import this executable.
+if( NOT CMAKE_CROSSCOMPILING )
 
 include( CheckFunctionExists )
 include( CheckTypeSize )
@@ -98,16 +99,6 @@ add_executable( re2c
         src/parse/unescape.cc
         src/util/s_to_n32_unsafe.cc
         src/util/range.cc )
-
-if(EMSCRIPTEN)
-	target_link_options(re2c PRIVATE
-			-sSTACK_SIZE=8MB
-			-sALLOW_MEMORY_GROWTH
-			-sEXIT_RUNTIME
-			-sENVIRONMENT=node
-			-sNODERAWFS
-	)
-endif()
 
 set( CROSS_EXPORTS ${CROSS_EXPORTS} re2c PARENT_SCOPE )
 
