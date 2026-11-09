@@ -788,6 +788,8 @@ void FShaderManager::SetActiveShader(FShader::ShaderVariantData *sh)
 	{
 		glUseProgram(sh!= NULL? sh->GetHandle() : 0);
 		mActiveShader = sh;
+		if (sh != nullptr)
+			sh->viewMatricesUploaded = false;
 	}
 }
 

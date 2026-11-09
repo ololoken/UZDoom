@@ -96,6 +96,7 @@ public:
 	unsigned int mNumReserved;
 
 	unsigned int mMapStart;
+	bool mOrphanPending = false;
 
 	static const unsigned int BUFFER_SIZE = 2000000;
 	static const unsigned int BUFFER_SIZE_TO_USE = BUFFER_SIZE-500;
@@ -139,6 +140,7 @@ public:
 	void Reset()
 	{
 		mCurIndex = mIndex;
+		mOrphanPending = true;
 	}
 
 	void NextPipelineBuffer()
@@ -158,7 +160,21 @@ public:
 	void Unmap()
 	{
 		mVertexBuffer->Unmap();
-		mVertexBuffer->Upload(mMapStart * sizeof(FFlatVertex), (mCurIndex - mMapStart) * sizeof(FFlatVertex));
+		unsigned int count = mCurIndex - mMapStart;
+		if (count == 0)
+			return;
+
+		// Once per frame, and only when the backend actually discards the old storage.
+		// The reserved quads live at the start of the buffer, so they have to be sent again.
+		if (mOrphanPending && mVertexBuffer->Orphan())
+		{
+			mVertexBuffer->Upload(0, mCurIndex * sizeof(FFlatVertex));
+			mOrphanPending = false;
+		}
+		else
+		{
+			mVertexBuffer->Upload(mMapStart * sizeof(FFlatVertex), count * sizeof(FFlatVertex));
+		}
 	}
 
 	void DropSync()

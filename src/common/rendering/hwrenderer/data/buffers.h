@@ -98,6 +98,9 @@ public:
 	virtual void Resize(size_t newsize) = 0;
 
 	virtual void Upload(size_t start, size_t size) {} // For unmappable buffers
+	// Replace the buffer's storage so a following upload does not wait on a draw still reading it.
+	// Returns true when the previous contents were discarded.
+	virtual bool Orphan() { return false; }
 
 	virtual void Map() {}		// Only needed by old OpenGL but this needs to be in the interface.
 	virtual void Unmap() {}

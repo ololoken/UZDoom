@@ -305,8 +305,8 @@ public: class ShaderVariantData
 		FBufferedUniformMat4fv muViewMatrix;
 		FBufferedUniformMat4fv muNormalViewMatrix;
 
-		FUniform4f muCameraPos;
-		FUniform4f muClipLine;
+		FBufferedUniform4f muCameraPos;
+		FBufferedUniform4f muClipLine;
 
 		FBufferedUniform1f muGlobVis;
 		FBufferedUniform1i muPalLightLevels;
@@ -367,6 +367,7 @@ public: class ShaderVariantData
 		int currentfixedcolormap = 0;
 		bool currentTextureMatrixState = true;// by setting the matrix state to 'true' it is guaranteed to be set the first time the render state gets applied.
 		bool currentModelMatrixState = true;
+		bool viewMatricesUploaded = false;
 
 		unsigned int GetHandle() const { return hShader; }
 	};

@@ -62,6 +62,7 @@ protected:
 public:
 	void Bind();
 	void Upload(size_t start, size_t end);
+	bool Orphan() override;
 };
 
 

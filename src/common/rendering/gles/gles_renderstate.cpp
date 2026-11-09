@@ -210,9 +210,14 @@ bool FGLRenderState::ApplyShader()
 
 	if (mHwUniforms)
 	{
-		activeShader->cur->muProjectionMatrix.Set(&mHwUniforms->ProjectionMatrix);
-		activeShader->cur->muViewMatrix.Set(&mHwUniforms->ViewMatrix);
-		activeShader->cur->muNormalViewMatrix.Set(&mHwUniforms->NormalViewMatrix);
+		// Re-sent when the program changes or the viewpoint is rebuilt. A value compare here breaks the 2D menu.
+		if (!activeShader->cur->viewMatricesUploaded)
+		{
+			activeShader->cur->muProjectionMatrix.Set(&mHwUniforms->ProjectionMatrix);
+			activeShader->cur->muViewMatrix.Set(&mHwUniforms->ViewMatrix);
+			activeShader->cur->muNormalViewMatrix.Set(&mHwUniforms->NormalViewMatrix);
+			activeShader->cur->viewMatricesUploaded = true;
+		}
 		activeShader->cur->muCameraPos.Set(&mHwUniforms->mCameraPos.X);
 		activeShader->cur->muClipLine.Set(&mHwUniforms->mClipLine.X);
 		activeShader->cur->muGlobVis.Set(mHwUniforms->mGlobVis);
@@ -385,16 +390,19 @@ void FGLRenderState::ApplyState()
 	}
 
 
-	if (mBias.mFactor == 0 && mBias.mUnits == 0)
+	if (mBias.mChanged)
 	{
-		glDisable(GL_POLYGON_OFFSET_FILL);
+		if (mBias.mFactor == 0 && mBias.mUnits == 0)
+		{
+			glDisable(GL_POLYGON_OFFSET_FILL);
+		}
+		else
+		{
+			glEnable(GL_POLYGON_OFFSET_FILL);
+		}
+		glPolygonOffset(mBias.mFactor, mBias.mUnits);
+		mBias.mChanged = false;
 	}
-	else
-	{
-		glEnable(GL_POLYGON_OFFSET_FILL);
-	}
-	glPolygonOffset(mBias.mFactor, mBias.mUnits);
-	mBias.mChanged = false;
 }
 
 void FGLRenderState::ApplyBuffers()
@@ -729,6 +737,7 @@ bool FGLRenderState::SetDepthClamp(bool on)
 void FGLRenderState::ApplyViewport(void* data)
 {
 	mHwUniforms = reinterpret_cast<HWViewpointUniforms*>(static_cast<uint8_t*>(data));
-
+	if (activeShader != nullptr && activeShader->cur != nullptr)
+		activeShader->cur->viewMatricesUploaded = false;
 }
 }

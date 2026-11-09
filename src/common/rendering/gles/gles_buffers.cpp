@@ -138,6 +138,17 @@ void GLBuffer::Upload(size_t start, size_t size)
 	}
 }
 
+bool GLBuffer::Orphan()
+{
+	// WebGL has no buffer-map fence, so SubData into a buffer the previous frame is still drawing stalls.
+	if (gles.glesMode != GLES_MODE_WEBGL || isData || buffersize == 0)
+		return false;
+
+	Bind();
+	glBufferData(mUseType, buffersize, nullptr, GL_STREAM_DRAW);
+	return true;
+}
+
 void GLBuffer::Map()
 {
 	if (!isData && gles.useMappedBuffers)

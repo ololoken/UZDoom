@@ -1648,7 +1648,8 @@ void HWSprite::ProcessParticle(HWDrawInfo *di, particle_t *particle, sector_t *s
 		else hw_styleflags = STYLEHW_NoAlphaTest;
 	}
 
-	if (sector->e->XFloor.lightlist.Size() != 0 && !di->isFullbrightScene() && !fullbright)
+	// Without clip planes each light layer redraws the whole quad. One draw uses the light chosen above.
+	if (!(screen->hwcaps & RFL_NO_CLIP_PLANES) && sector->e->XFloor.lightlist.Size() != 0 && !di->isFullbrightScene() && !fullbright)
 		lightlist = &sector->e->XFloor.lightlist;
 	else
 		lightlist = nullptr;
