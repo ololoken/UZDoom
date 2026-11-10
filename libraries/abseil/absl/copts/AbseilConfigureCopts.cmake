@@ -103,4 +103,11 @@ else()
   set(ABSL_TEST_COPTS "")
 endif()
 
+# Emscripten's version.h marks __EMSCRIPTEN_minor__ deprecated. Abseil turns
+# -Wdeprecated-pragma on in ABSL_DEFAULT_COPTS, so the suppression has to come
+# after that flag. This file is included before any absl target reads the list.
+if(EMSCRIPTEN)
+  list(APPEND ABSL_DEFAULT_COPTS "-Wno-deprecated-pragma")
+endif()
+
 set(ABSL_CXX_STANDARD "${CMAKE_CXX_STANDARD}")

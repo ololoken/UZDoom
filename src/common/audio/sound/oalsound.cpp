@@ -172,6 +172,10 @@ static constexpr ALenum GetFormat(SampleType stype, ChannelConfig chans)
 static ALenum checkALError(const char *fn, unsigned int ln)
 {
 	ALenum err = alGetError();
+	// OpenAL-soft on Emscripten reports benign errors (unsupported extensions,
+	// format fallbacks) on the normal playback path. Keep clearing the error
+	// state, but don't spam the console.
+#ifndef __EMSCRIPTEN__
 	if(err != AL_NO_ERROR)
 	{
 		if(strchr(fn, '/'))
@@ -180,6 +184,10 @@ static ALenum checkALError(const char *fn, unsigned int ln)
 			fn = strrchr(fn, '\\')+1;
 		Printf(">>>>>>>>>>>> Received AL error %s (%#x), %s:%u\n", alGetString(err), err, fn, ln);
 	}
+#else
+	(void)fn;
+	(void)ln;
+#endif
 	return err;
 }
 #define getALError() checkALError(__FILE__, __LINE__)
@@ -187,6 +195,7 @@ static ALenum checkALError(const char *fn, unsigned int ln)
 static ALCenum checkALCError(ALCdevice *device, const char *fn, unsigned int ln)
 {
 	ALCenum err = alcGetError(device);
+#ifndef __EMSCRIPTEN__
 	if(err != ALC_NO_ERROR)
 	{
 		if(strchr(fn, '/'))
@@ -195,6 +204,10 @@ static ALCenum checkALCError(ALCdevice *device, const char *fn, unsigned int ln)
 			fn = strrchr(fn, '\\')+1;
 		Printf(">>>>>>>>>>>> Received ALC error %s (%#x), %s:%u\n", alcGetString(device, err), err, fn, ln);
 	}
+#else
+	(void)fn;
+	(void)ln;
+#endif
 	return err;
 }
 #define getALCError(d) checkALCError((d), __FILE__, __LINE__)

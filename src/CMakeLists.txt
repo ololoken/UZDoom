@@ -1332,6 +1332,7 @@ if(EMSCRIPTEN)
 			$<$<CONFIG:RELEASE>:-sJSPI -sASYNCIFY_STACK_SIZE=1MB>
 			--use-port=sdl2
 			--use-port=bzip2
+			-fwasm-exceptions
 			-sSTACK_SIZE=8MB
 			-sINITIAL_MEMORY=1GB
 			-sALLOW_MEMORY_GROWTH
@@ -1340,7 +1341,6 @@ if(EMSCRIPTEN)
 			-sEXPORTED_RUNTIME_METHODS=callMain,addRunDependency,removeRunDependency,ENV,FS,PATH
 			-lidbfs.js
 			-sEXIT_RUNTIME
-			-sNO_DISABLE_EXCEPTION_CATCHING
 			-sMAX_WEBGL_VERSION=2
 			-sMIN_WEBGL_VERSION=2
 			-sFULL_ES2
@@ -1351,6 +1351,7 @@ if(EMSCRIPTEN)
 	target_compile_options(zdoom PRIVATE
 			--use-port=sdl2
 			--use-port=bzip2
+			-fwasm-exceptions
 			$<$<CONFIG:RELEASE>:-O3 -flto>
 			$<$<CONFIG:DEBUG>:-g -gsource-map>
 	)

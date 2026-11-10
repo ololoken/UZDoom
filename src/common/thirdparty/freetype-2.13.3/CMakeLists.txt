@@ -561,11 +561,13 @@ else ()
           --use-port=bzip2
           --use-port=zlib
           --use-port=libpng
+          -fwasm-exceptions
   )
   target_link_options(freetype INTERFACE
           --use-port=bzip2
           --use-port=zlib
           --use-port=libpng
+          -fwasm-exceptions
   )
 endif ()
 
