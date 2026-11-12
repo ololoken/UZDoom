@@ -27,6 +27,7 @@
 #include "v_font.h"
 #include "filesystem.h"
 #include "texturemanager.h"
+#include "gstrings.h"
 
 class FSinglePicFont : public FFont
 {
@@ -84,7 +85,21 @@ FGameTexture *FSinglePicFont::GetChar (int code, int translation, int *const wid
 	*width = SpaceWidth;
 	if (code == 'a' || code == 'A')
 	{
-		return TexMan.GetGameTexture(PicNum, true);
+		// A picture named like the font plus "R" (LWHPG00 -> LWHPG00R) is the
+		// Russian version. Names are at most 8 characters, so only shorter
+		// font names can have one.
+		FTextureID pic = PicNum;
+		FString active = GStrings.GetActiveLanguage();
+		if (active.IsEmpty()) active = "default";
+		FString base = FontName.GetChars();
+		if (base.Len() > 0 && base.Len() < 8 &&
+			GStrings.GetID(active).language == GStrings.GetID(FString("ru")).language)
+		{
+			FString alt = base + "R";
+			FTextureID altid = TexMan.CheckForTexture(alt.GetChars(), ETextureType::Any);
+			if (altid.isValid()) pic = altid;
+		}
+		return TexMan.GetGameTexture(pic, true);
 	}
 	else
 	{

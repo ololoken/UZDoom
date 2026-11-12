@@ -3197,6 +3197,18 @@ static bool isDehFile(int lumpnum)
 		&& (0 == stricmp(extension, ".deh") || 0 == stricmp(extension, ".bex"));
 }
 
+// Freedoom keeps its English names in DEHACKED and does not ship a LANGUAGE
+// lump, so the IWAD-only check below never skips them. BEX strings are applied
+// after LANGUAGE and replace the text for every language. When the player is
+// not using English, leave the translated strings in place.
+static bool DehLanguageUsesEnglishStrings()
+{
+	FString active = GStrings.GetActiveLanguage();
+	if (active.IsEmpty())
+		active = "default";
+	return GStrings.GetID(active).language == GStrings.GetID(FString("en")).language;
+}
+
 int D_LoadDehLumps(DehLumpSource source, int flags)
 {
 	int lastlump = 0, lumpnum, count = 0;
@@ -3225,6 +3237,10 @@ int D_LoadDehLumps(DehLumpSource source, int flags)
 			int lumpnum2 = fileSystem.FindLump("LANGUAGE", &lastlump2);
 
 			if(lumpnum2 >= 0 && fileSystem.GetFileContainer(lumpnum2) == iwadnum)
+			{
+				filtered_flags |= DEH_SKIP_BEX_STRINGS_IF_LANGUAGE;
+			}
+			if (!DehLanguageUsesEnglishStrings())
 			{
 				filtered_flags |= DEH_SKIP_BEX_STRINGS_IF_LANGUAGE;
 			}
