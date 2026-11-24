@@ -1,6 +1,6 @@
-# Build lemon, re2c, and zipdir with the host compiler and import the native
-# binaries into an Emscripten (or other cross) build. Build rules keep using
-# the lemon, re2c, and zipdir target names; those names resolve to host paths.
+# Build lemon and re2c with the host compiler and import the native binaries
+# into an Emscripten (or other cross) build. Build rules keep using the lemon
+# and re2c target names; those names resolve to host paths. zipdir is Python.
 
 function(_uzdoom_first_existing out_var)
 	foreach(candidate IN LISTS ARGN)
@@ -67,7 +67,7 @@ function(_uzdoom_detect_host_compilers out_c out_cxx)
 
 	if(NOT host_c OR NOT host_cxx)
 		message(FATAL_ERROR
-			"Could not find a native compiler for lemon, re2c, and zipdir.\n"
+			"Could not find a native compiler for lemon and re2c.\n"
 			"Set HOST_C_COMPILER and HOST_CXX_COMPILER to the host gcc/clang.")
 	endif()
 	_uzdoom_reject_emscripten_compiler("${host_c}" "C")
@@ -94,7 +94,7 @@ function(uzdoom_build_native_host_tools out_import)
 
 	set(host_tools_dir "${CMAKE_BINARY_DIR}/host-tools")
 	set(host_import "${host_tools_dir}/ImportExecutables.cmake")
-	message(STATUS "Building native lemon, re2c, and zipdir in ${host_tools_dir}")
+	message(STATUS "Building native lemon and re2c in ${host_tools_dir}")
 
 	set(configure_command
 		${CMAKE_COMMAND} -E env
@@ -139,12 +139,12 @@ function(uzdoom_build_native_host_tools out_import)
 	endif()
 
 	execute_process(
-		COMMAND ${CMAKE_COMMAND} --build "${host_tools_dir}" --target lemon re2c zipdir --parallel
+		COMMAND ${CMAKE_COMMAND} --build "${host_tools_dir}" --target lemon re2c --parallel
 		RESULT_VARIABLE build_result
 	)
 	if(NOT build_result EQUAL 0)
 		message(FATAL_ERROR
-			"Failed to build native lemon, re2c, and zipdir (exit ${build_result}).")
+			"Failed to build native lemon and re2c (exit ${build_result}).")
 	endif()
 	if(NOT EXISTS "${host_import}")
 		message(FATAL_ERROR "Native host tools did not write ${host_import}")
@@ -167,7 +167,7 @@ endfunction()
 # Point every consumer configuration at the native binary that was exported,
 # and make sure node is not used to launch it.
 function(uzdoom_map_host_tool_configs)
-	foreach(tool lemon re2c zipdir)
+	foreach(tool lemon re2c)
 		if(NOT TARGET ${tool})
 			message(FATAL_ERROR "ImportExecutables.cmake did not provide '${tool}'")
 		endif()

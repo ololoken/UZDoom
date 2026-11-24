@@ -10,6 +10,22 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(TESTING_FEATURES ON "Enable development features")
+macro(FEATURE NAME DESCRIPTION)
+	option( FEATURE_${NAME} "Feature: ${DESCRIPTION}" NO )
+	set( HAS_FEATURES TRUE )
+	list( APPEND ALL_FEATURES ${NAME} )
+	if ( ${FEATURE_${NAME}} OR ${TESTING_FEATURES} )
+		list(APPEND USED_FEATURES "FEATURE_${NAME}")
+	endif()
+endmacro()
+
+## BEGIN FEATURE FLAGS
+## set feature flags like: FEATURE(FOO "does something cool")
+## these are for indev features to allow for piecemeal PRs
+
+## END set feature flags here
+
 macro(FLAGS CONFIG CL_FLAGS CC_FLAGS)
 	if(MSVC)
 		set(CMAKE_C_FLAGS_${CONFIG} ${CL_FLAGS} CACHE STRING "${CONFIG} C flags" FORCE)
@@ -47,17 +63,11 @@ macro( make_release_only )
 	string( REPLACE "/MT " "/MTd " CMAKE_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_RELEASE} )
 endmacro()
 
-# Nested native build used by the Emscripten configure. lemon, re2c, and zipdir
-# run on the host during the build, so they must not go through emcc.
+# Nested native build used by the Emscripten configure. lemon and re2c run on
+# the host during the build, so they must not go through emcc. zipdir is Python.
 if( BUILD_HOST_TOOLS_ONLY )
-	message( STATUS "Configuring native host tools (lemon, re2c, zipdir)" )
-	set( LZMA_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libraries/lzma/C" )
-	set( BZIP2_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libraries/bzip2" )
-	set( BZIP2_LIBRARIES bz2 )
+	message( STATUS "Configuring native host tools (lemon, re2c)" )
 	set( CROSS_EXPORTS "" )
-	add_subdirectory( libraries/miniz )
-	add_subdirectory( libraries/bzip2 )
-	add_subdirectory( libraries/lzma )
 	add_subdirectory( tools )
 	export( TARGETS ${CROSS_EXPORTS} FILE "${CMAKE_BINARY_DIR}/ImportExecutables.cmake" )
 	return()
@@ -116,6 +126,7 @@ endif ()
 
 list( APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake )
 include( FindPackageHandleStandardArgs )
+include( CheckSourceCompiles )
 
 include( NativeHostTools )
 
@@ -125,17 +136,17 @@ if( FORCE_CROSSCOMPILE )
 	set( CMAKE_CROSSCOMPILING TRUE )
 endif()
 
-# lemon, re2c, and zipdir are host tools. Cross builds, including Emscripten,
-# import native executables and keep invoking them by those target names.
+# lemon and re2c are host tools. Cross builds, including Emscripten, import
+# native executables and keep invoking them by those target names.
 if( CMAKE_CROSSCOMPILING )
-	set( IMPORT_EXECUTABLES "" CACHE FILEPATH "Path to ImportExecutables.cmake from a native build. Leave empty for an Emscripten build to compile lemon, re2c, and zipdir with the host compiler." )
+	set( IMPORT_EXECUTABLES "" CACHE FILEPATH "Path to ImportExecutables.cmake from a native build. Leave empty for an Emscripten build to compile lemon and re2c with the host compiler." )
 	if( (EMSCRIPTEN OR CMAKE_SYSTEM_NAME STREQUAL "Emscripten") AND (IMPORT_EXECUTABLES STREQUAL "" OR IMPORT_EXECUTABLES MATCHES "NOTFOUND") )
 		uzdoom_build_native_host_tools( UZDOOM_HOST_TOOLS_IMPORT )
 		set( IMPORT_EXECUTABLES "${UZDOOM_HOST_TOOLS_IMPORT}" )
 	endif()
 	if( NOT EXISTS "${IMPORT_EXECUTABLES}" )
 		message( FATAL_ERROR
-			"This cross build needs native lemon, re2c, and zipdir.\n"
+			"This cross build needs native lemon and re2c.\n"
 			"Set IMPORT_EXECUTABLES to ImportExecutables.cmake produced by a native build." )
 	endif()
 	# add_executable(IMPORTED) copies CMAKE_CROSSCOMPILING_EMULATOR onto the
@@ -172,7 +183,12 @@ endfunction()
 
 option( PK3_QUIET_ZIPDIR "Do not list files processed by zipdir" NO )
 if( PK3_QUIET_ZIPDIR )
-	set( PK3_ZIPDIR_OPTIONS "-q" )
+	list( APPEND PK3_ZIPDIR_OPTIONS "-q" )
+endif()
+
+if( USED_FEATURES )
+	string( REPLACE ";" " " USED_FEATURES_STR "${USED_FEATURES}" )
+	list( APPEND PK3_ZIPDIR_OPTIONS "-f" "${USED_FEATURES_STR}" )
 endif()
 
 # Simplify pk3 building, add_pk3(filename srcdirectory [srcdirectory2 ...])
@@ -181,8 +197,14 @@ function( add_pk3 PK3_NAME )
 	string( REPLACE "." "_" PK3_TARGET ${PK3_NAME} )
 
 	add_custom_command( OUTPUT ${ZDOOM_OUTPUT_DIR}/${PK3_NAME}
-			COMMAND zipdir -udf ${PK3_ZIPDIR_OPTIONS} ${ZDOOM_OUTPUT_DIR}/${PK3_NAME} ${ARGN}
-	DEPENDS zipdir )
+		COMMAND Python3::Interpreter -B -E -s
+			${CMAKE_SOURCE_DIR}/tools/zipdir.py
+			-p "zs txt"
+			-dm ${CMAKE_BINARY_DIR}/gitinfo.h
+			${PK3_ZIPDIR_OPTIONS}
+			${ZDOOM_OUTPUT_DIR}/${PK3_NAME}
+			${ARGN}
+		DEPENDS ${CMAKE_SOURCE_DIR}/tools/zipdir.py ${CMAKE_BINARY_DIR}/gitinfo.h )
 
 	# Create a list of source files for this PK3, for use in the IDE
 	# Phase 1: Create a list of all source files for this PK3 archive, except
@@ -209,10 +231,8 @@ function( add_pk3 PK3_NAME )
 	endforeach()
 
 	# Phase 2: Create the PK3 build rule, including the source file list for the IDE
-	# Touch the zipdir executable here so that the pk3s are forced to
-	# rebuild each time since their dependency has "changed."
 	add_custom_target( ${PK3_TARGET} ALL
-		COMMAND ${CMAKE_COMMAND} -E touch $<TARGET_FILE:zipdir>
+		COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_SOURCE_DIR}/tools/zipdir.py
 		DEPENDS ${ZDOOM_OUTPUT_DIR}/${PK3_NAME}
 		SOURCES ${PK3_SRCS})
 
@@ -407,6 +427,24 @@ if( MSVC )
 		string(REPLACE "/Zi" "/Z7" CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO}")
 	endif()
 else()
+	if(LINUX)
+		cmake_push_check_state()
+		set(CMAKE_REQUIRED_QUIET TRUE)
+		check_source_compiles(C [[
+				#include <features.h>
+				#if !defined(__GLIBC__) && !defined(__UCLIBC__) && !defined(__ANDROID__)
+					int main() { return 0; }
+				#endif
+			]] IS_MUSL)
+		cmake_pop_check_state()
+	endif()
+
+	if(IS_MUSL)
+		# band-aid fix for Alpine not liking FString
+		# TODO: actually fix this
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -U_FORTIFY_SOURCE")
+	endif()
+
 	set( REL_LINKER_FLAGS "" )
 	set( ALL_C_FLAGS "-ffp-contract=off" )
 
@@ -425,7 +463,7 @@ else()
 			pkg_check_modules( MUSL_FTS musl-fts )
 			if ( MUSL_FTS_FOUND )
 				list(JOIN MUSL_FTS_LDFLAGS " " MUSL_FTS_LDFLAGS_JOINED)
-				set ( ALL_C_FLAGS "${ALL_C_FLAGS} ${MUSL_FTS_LDFLAGS_JOINED}" )
+				set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${MUSL_FTS_LDFLAGS_JOINED}")
 			else ( MUSL_FTS_FOUND )
 				message (ERROR "fts_* functions not found in the system" )
 			endif ( MUSL_FTS_FOUND )
@@ -473,6 +511,38 @@ set( CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${DEB_C_FLAGS} -D_DEBUG" )
 option(FORCE_INTERNAL_BZIP2 "Use internal bzip2")
 option(FORCE_INTERNAL_CPPDAP "Use internal cppdap" ON)
 option(FORCE_INTERNAL_WEBP "Use internal webp" ON)
+
+find_package(Git QUIET)
+if(HAS_FEATURES)
+	if (USED_FEATURES)
+		add_compile_definitions(${USED_FEATURES})
+		string( REPLACE ";" " " USED_FEATURES_STR "${USED_FEATURES}" )
+		add_compile_definitions(COMPILED_FEATURES="${USED_FEATURES_STR}")
+	endif()
+	message(STATUS "Features being tested:")
+	foreach(_feat ${ALL_FEATURES})
+		if(FEATURE_${_feat} OR TESTING_FEATURES)
+			message(STATUS "  ${_feat}: Yes")
+		else()
+			message(STATUS "  ${_feat}: No")
+		endif()
+	endforeach()
+elseif(GIT_FOUND)
+	execute_process(
+		COMMAND git grep -n " FEATURE_[^\$]" -- ":!*thirdparty*" ":!*libraries*"
+		WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+		OUTPUT_VARIABLE GIT_GREP_OUT
+		OUTPUT_STRIP_TRAILING_WHITESPACE )
+
+	string(REPLACE "\n" ";" GIT_GREP_LINES "${GIT_GREP_OUT}")
+	foreach(_line ${GIT_GREP_LINES})
+		string(REPLACE ":" ";" _parts "${_line}")
+		list(GET _parts 0 _filepath)
+		if(NOT _filepath STREQUAL "CMakeLists.txt")
+			message(FATAL_ERROR "Unused feature: ${_line}")
+		endif()
+	endforeach()
+endif()
 
 if (HAVE_VULKAN)
 	add_subdirectory( libraries/ZVulkan )
